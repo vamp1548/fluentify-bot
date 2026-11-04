@@ -16,9 +16,23 @@ logger = logging.getLogger(__name__)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# پیکربندی هوش مصنوعی جمینای با نام دقیق و استاندارد
+# پیکربندی هوش مصنوعی جمینای
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+
+# پیدا کردن هوشمندانه مدل مناسب برای جلوگیری از خطای 404
+def get_working_model():
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                if 'gemini' in m.name:
+                    logger.info(f"Using AI Model: {m.name}")
+                    return genai.GenerativeModel(m.name)
+    except Exception as e:
+        logger.error(f"Error listing models: {e}")
+    # مدل پیش‌فرض ایمن
+    return genai.GenerativeModel("gemini-1.5-flash")
+
+model = get_working_model()
 
 # دیتابیس ساده در حافظه برای نگهداری پروفایل کاربران
 user_profiles = {}
