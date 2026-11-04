@@ -1,6 +1,6 @@
 import os
 import logging
-import threading
+import asyncio
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -23,17 +23,12 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 # دیتابیس ساده در حافظه برای نگهداری پروفایل کاربران
 user_profiles = {}
 
-# --- ساخت وب‌سرور ساختگی برای راضی نگه داشتن Render ---
+# --- ساخت وب‌سرور فلاسگ برای Render ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "Fluentify Bot is running!"
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-# --------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -104,12 +99,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(reply_text)
 
-def main():
-    # روشن کردن سرور فلاسگ در یک مسیر جداگانه (Thread) در پس‌زمینه
-    t = threading.Thread(target=run_web)
-    t.start()
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
 
-    # اجرای ربات تلگرام
+async def main():
+    # راه‌اندازی وب‌سرور فلاسگ در پس‌زمینه به صورت ایمن با Event Loop
+    import threading
+    threading.Thread(target=run_flask, daemon=True).start()
+
+    # ساخت و اجرای ربات تلگرام
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -117,8 +116,16 @@ def main():
     application.add_handler(CommandHandler("setlevel", set_level))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    print("Bot is running...")
-    application.run_polling()
+    print("Bot and Web Server are running...")
+    
+    # اجرای استاندارد ربات
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    
+    # نگه داشتن برنامه روشن
+    stop_event = asyncio.Event()
+    await stop_event.wait()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
