@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# پیکربندی هوش مصنوعی جمینای
+# پیکربندی هوش مصنوعی جمینای (استفاده از مدل پرو)
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-1.5-pro")
 
 # دیتابیس ساده در حافظه برای نگهداری پروفایل کاربران
 user_profiles = {}
