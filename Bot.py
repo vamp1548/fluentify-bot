@@ -1,10 +1,12 @@
 import os
 import logging
+import threading
+from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import google.generativeai as genai
 
-# تنظیمات لاگ‌گیری برای رصد وضعیت ربات
+# تنظیمات لاگ‌گیری
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -16,17 +18,25 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # پیکربندی هوش مصنوعی جمینای
 genai.configure(api_key=GEMINI_API_KEY)
-# استفاده از مدل استاندارد و قدرتمند جمینای
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# دیتابیس ساده در حافظه برای نگهداری پروفایل کاربران (جدا کردن کاربران از یکدیگر)
+# دیتابیس ساده در حافظه برای نگهداری پروفایل کاربران
 user_profiles = {}
 
+# --- ساخت وب‌سرور ساختگی برای راضی نگه داشتن Render ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Fluentify Bot is running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+# --------------------------------------------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دستور شروع و خوش‌آمدگویی به کاربر"""
     user_id = update.effective_user.id
-    
-    # ساخت پروفایل پیش‌فرض برای کاربر جدید
     if user_id not in user_profiles:
         user_profiles[user_id] = {
             "language": "English",
@@ -37,16 +47,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     welcome_message = (
         "سلام! من مربی هوشمند زبان شما (Fluentify) هستم.\n\n"
-        "ما اینجا قرار است به صورت کاملاً اختصاصی روی زبان و پیشرفت شما کار کنیم.\n"
         "دستورات اصلی:\n"
-        "🔹 /setlang [زبان] - تعیین زبان مورد نظر (مثل French, English, German)\n"
+        "🔹 /setlang [زبان] - تعیین زبان مورد نظر (مثل French, English)\n"
         "🔹 /setlevel [سطح] - تعیین سطح (مثل A2, B1, B2)\n\n"
-        "هم همین الان می‌تونی یک متن یا ویس برام بفرستی تا تمرین رو شروع کنیم!"
+        "همین الان می‌تونی یک متن برام بفرستی تا تمرین رو شروع کنیم!"
     )
     await update.message.reply_text(welcome_message)
 
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تنظیم زبان مورد نظر کاربر"""
     user_id = update.effective_user.id
     if context.args:
         lang = context.args[0]
@@ -54,12 +62,11 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_profiles[user_id] = {"language": lang, "level": "B1", "score": 0, "vocabulary": []}
         else:
             user_profiles[user_id]["language"] = lang
-        await update.message.reply_text(f"زبان تمرین شما با موفقیت روی **{lang}** تنظیم شد.")
+        await update.message.reply_text(f"زبان تمرین شما روی **{lang}** تنظیم شد.")
     else:
-        await update.message.reply_text("لطفاً نام زبان را وارد کنید. مثال:\n`/setlang French` یا `/setlang English`", parse_mode="Markdown")
+        await update.message.reply_text("لطفاً نام زبان را وارد کنید. مثال:\n`/setlang French`", parse_mode="Markdown")
 
 async def set_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تنظیم سطح زبان کاربر"""
     user_id = update.effective_user.id
     if context.args:
         lvl = context.args[0]
@@ -67,16 +74,14 @@ async def set_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_profiles[user_id] = {"language": "English", "level": lvl, "score": 0, "vocabulary": []}
         else:
             user_profiles[user_id]["level"] = lvl
-        await update.message.reply_text(f"سطح زبان شما با موفقیت روی **{lvl}** تنظیم شد.")
+        await update.message.reply_text(f"سطح زبان شما روی **{lvl}** تنظیم شد.")
     else:
         await update.message.reply_text("لطفاً سطح خود را وارد کنید. مثال:\n`/setlevel B2`", parse_mode="Markdown")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """پردازش پیام‌ها، تصحیح متن‌ها و بازخورد هوش مصنوعی"""
     user_id = update.effective_user.id
     user_text = update.message.text
     
-    # دریافت تنظیمات اختصاصی این کاربر خاص
     profile = user_profiles.get(user_id, {"language": "English", "level": "B1", "score": 0, "vocabulary": []})
     target_lang = profile["language"]
     target_level = profile["level"]
@@ -100,10 +105,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply_text)
 
 def main():
-    """راه‌اندازی و اجرای ربات"""
+    # روشن کردن سرور فلاسگ در یک مسیر جداگانه (Thread) در پس‌زمینه
+    t = threading.Thread(target=run_web)
+    t.start()
+
+    # اجرای ربات تلگرام
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # ثبت دستورات و هندلرها
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("setlang", set_language))
     application.add_handler(CommandHandler("setlevel", set_level))
