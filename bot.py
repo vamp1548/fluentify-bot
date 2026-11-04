@@ -95,7 +95,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = model.generate_content(prompt)
         reply_text = response.text
     except Exception as e:
-        reply_text = "متأسفانه در ارتباط با هوش مصنوعی خطایی رخ داد. لطفاً دوباره تلاش کنید."
+        logger.error(f"Detailed Gemini Error: {str(e)}")
+        reply_text = f"خطای فنی هوش مصنوعی: {str(e)}"
 
     await update.message.reply_text(reply_text)
 
@@ -104,11 +105,9 @@ def run_flask():
     app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 async def main():
-    # راه‌اندازی وب‌سرور فلاسگ در پس‌زمینه به صورت ایمن با Event Loop
     import threading
     threading.Thread(target=run_flask, daemon=True).start()
 
-    # ساخت و اجرای ربات تلگرام
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -118,12 +117,10 @@ async def main():
 
     print("Bot and Web Server are running...")
     
-    # اجرای استاندارد ربات
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
     
-    # نگه داشتن برنامه روشن
     stop_event = asyncio.Event()
     await stop_event.wait()
 
